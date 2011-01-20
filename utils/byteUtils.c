@@ -17,6 +17,10 @@
 
 #include "byteUtils.h"
 
+#ifdef _MSC_VER
+#define __func__ __FUNCTION__
+#endif
+
 ///////////////////////////////////////////////////////////////////////////////
 //Local Macro define
 #define BYTE_BE2LE_U16(u16) \

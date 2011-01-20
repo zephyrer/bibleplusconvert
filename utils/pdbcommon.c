@@ -14,6 +14,10 @@
 #include <stdlib.h>
 #include "pdbcommon.h"
 
+#ifdef _MSC_VER
+#define __func__ __FUNCTION__
+#endif
+
 ///////////////////////////////////////////////////////////////////////////////
 //Global helper function define
 uint8_t fread_u8(FILE* fp)

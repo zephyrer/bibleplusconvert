@@ -1,3 +1,10 @@
+bzr -r:tag pdbconvert-0.0.2
+    @brief 
+        Support msvc.
+    @modify
+        all comment to english.
+        reconstruct code layout.
+
 bzr -r:tag pdbconvert-0.0.1
     @brief
         I am 'buaa.byl@gmail.com' in launchpad.net.

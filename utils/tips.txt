@@ -1,0 +1,54 @@
+        TIPS
+
+1. 定位章节的方法
+
+
+
+1. 定位章节的方法
+    1.1. 简介
+      verseOffset       : 指向下一句距离本章开始的偏移，本章最后一节对应的
+                         verseOffset指向下一章的第一句
+      lastVerseNumber   : 记录本章的最后一个verse距离的标号，把所有的verse
+            序号累加了，所以这个值的意义是本章最后一句是本书的第几句。
+     
+      以下是Gen的信息（sample of gen.）
+    ---------------------------------------------------------------------
+      chapter  verse   verseOffset lastVerseNumber chapterOffset
+        1        1       [0]=22                       [0]=0
+                 2       [1]=48                    
+                         ...         
+                 29      [28]=722
+                 30      [29]=760
+                 31      [30]=784     [0]=31
+       -----------------
+        2        1       [31]=17                      [1]=784
+                         ...
+                         [54]=597
+                 25      [55]=612     [1]=56
+       -----------------
+        3        1       [56]=36                      [2]=1396
+                 2       [57]=53
+    ---------------------------------------------------------------------
+     
+    1.2.例子
+        想要查询圣经的第二章、25卷具体的步骤如下：
+      byteOffset(chapter 2, verse 25) 
+    = chapterOffset[2 - 1] + verseOffset[lastVerseNumber[(2 - 1) - 1] + 25 -2]
+    = 784 + verseOffset[31 + 25 -2]
+    = 784 + verseOffset[54]
+    = 784 + 597
+    = 1381
+
+    1.3. 接口
+    struct VerseOffset GetVerseOffsetFromPDB(
+            const struct PDBLayout* pdbLayout,
+            uint8_t  bookToView,
+            uint8_t  chapterToView,
+            uint16_t verseToView);
+
+2.字典的算法
+    每个wordBriefData都有一个属性：单词个数。需要先判断 index 
+  属于哪个dict，然后累加之前的数据，得到word offset，再加上
+  word data的起始offset，这个数就是那个单词在文件中的偏移。
+ 
+

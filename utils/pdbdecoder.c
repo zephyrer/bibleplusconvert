@@ -22,41 +22,32 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 //Local PDB decode interface declare
-///解码PDB的文件头
 static int DecodePDBHeader(struct PDBHeader* header, FILE* fp);
-///解码PDB的跳转表
 static int DecodePDBJumpTable(
         struct JumpTable* jumpTable, 
         uint16_t numRecs,
         FILE* fp);
-///解码PDB的书卷摘要信息
 static int DecodeBibleBookBriefInfo(
         struct BookBriefInfo* bookBriefInfo,
         int nrOfBooks,
         FILE* fp);
-///解码PDB的书卷版本信息
 static int DecodeBibleVersion(
         struct RecordVersion*    version,
         FILE* fp);
-///解码PDB的单词表
 static int DecodeBibleWordTable(
         struct RecordWordTable*  wordTable,
         FILE* fp);
-///解码PDB的字典
 static int DecodeBibleWordDict(
         struct RecordWordData* wordData,
         const struct RecordWordTable* wordTable,
         FILE* fp);
-///解码PDB的书卷详细索引信息
 static int DecodeBibleBookDetailInfo(
         struct BookDetailInfo* bookDetailInfo,
         FILE* fp);
-///解码PDB的书卷数据
 static int DecodeBibleBookDetailData(
         struct BookDetailData* bookDetailData,
         const struct BookDetailInfo* bookDetailInfo,
         FILE* fp);
-///解码PDB的详细信息
 static int DecodeBibleBookDetail(
         struct RecordBookDetail* bookDetail,
         const struct JumpTable*  jumpTable,
@@ -276,9 +267,6 @@ int DecodeBibleBookDetailInfo(
     }
     else
     {
-        //fread_blob(bookDetailInfo->lastVerseNumber,
-        //        sizeof(uint16_t) * numChapters,
-        //        fp);
         for (i = 0;i < numChapters;i++)
         {
             bookDetailInfo->lastVerseNumber[i] = fread_u16(fp);
@@ -301,9 +289,6 @@ int DecodeBibleBookDetailInfo(
     }
     else
     {
-        //fread_blob(bookDetailInfo->chapterOffset,
-        //        sizeof(uint32_t) * numChapters,
-        //        fp);
         for (i = 0;i < numChapters;i++)
         {
             bookDetailInfo->chapterOffset[i] = fread_u32(fp);
@@ -331,9 +316,6 @@ int DecodeBibleBookDetailInfo(
     }
     else
     {
-        //fread_blob(bookDetailInfo->verseOffset,
-        //        sizeof(uint16_t) * lastVerseNumber,
-        //        fp);
         for (i = 0;i < lastVerseNumber;i++)
         {
             bookDetailInfo->verseOffset[i] = fread_u16(fp);

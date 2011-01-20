@@ -28,7 +28,7 @@ struct VerseData
 
 /**
  * @brief Get number of chapter from pdb
- * @tip bookToView是从1开始计数
+ * @tip bookToView start with 1
  */
 uint16_t GetNumberOfChapters(
         const struct PDBLayout* pdbLayout,
@@ -36,7 +36,7 @@ uint16_t GetNumberOfChapters(
 
 /**
  * @brief Get number of verse from pdb
- * @tip bookToView, chapterToView都是从1开始计数
+ * @tip bookToView, chapterToView both start with 1
  */
 uint16_t GetNumberOfVerses(
         const struct PDBLayout* pdbLayout,
@@ -44,7 +44,7 @@ uint16_t GetNumberOfVerses(
         uint8_t  chapterToView);
 /**
  * @brief Get verse offset from pdb
- * @tip bookToView, chapterToView, verseToView 都是从1开始计数
+ * @tip bookToView, chapterToView, verseToView all start with 1
  */
 struct VerseOffset GetVerseOffsetFromPDB(
         const struct PDBLayout* pdbLayout,
@@ -56,10 +56,10 @@ struct VerseOffset GetVerseOffsetFromPDB(
  * @brief Get word offset from pdb
  * @details     
  *
- * @param[in]   pdbLayout PDB布局文件
- * @param[in]   wordIndex 需要查找的单词在整个字典中的索引号
+ * @param[in]   pdbLayout pdb layout file
+ * @param[in]   wordIndex start with 1.
  *
- * @tip wordIndex 从1开始计数
+ * @tip wordIndex from 1
  */
 struct WordOffset GetWordOffsetFromPDB(
         const struct PDBLayout* pdbLayout,
@@ -88,12 +88,26 @@ uint16_t PDBPrintWordDict(
 /**
  * @brief Get verse data form pdb
  *
- * @tip bookToView, chapterToView, verseToView 都是从1开始计数
+ * @tip bookToView, chapterToView, verseToView all start with 1
  */
 struct VerseData DecompressBookAllVerseData(
         const struct PDBLayout* pdbLayout,
-        uint8_t  bookToView,//From 1
+        uint8_t  bookToView,
         FILE* fp);
+
+/**
+ * @brief decode verse , map word index to real word.
+ *
+ * @tip buffer must big enough! may be 4096.
+ */
+void DecompressVerse(
+        const struct PDBLayout* pdbLayout,
+        const uint16_t* verseData, 
+        const uint32_t  verseNROfWords,
+        uint32_t verseOffset,
+        uint16_t nrOfWords,
+        FILE* fp,
+        uint8_t* buffer);
 
 #endif
 
