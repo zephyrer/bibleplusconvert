@@ -54,12 +54,12 @@ int main(int argc, const char* argv[])
     {
         PDBPrintAllBookInfo(pdbLayout);
 
-        //释放PDBLayout
+        //release pdb struct
         FreePDBFile(pdbLayout);
         pdbLayout = NULL;
     }
 
-    //关闭输入文件
+    //close file
     fclose(fp);
     fp = NULL;
 

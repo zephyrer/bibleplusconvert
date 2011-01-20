@@ -12,12 +12,13 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "byteUtils.h"
 #include "pdbhelper.h"
 
 ///////////////////////////////////////////////////////////////////////////////
 //Local interface declare
-///解码14bit/16bit压缩的数据
+///decode 14bit/16bit encoded data.
 static uint16_t DecompressVerseData(
         const uint16_t* compressedVerseData,
         uint32_t nrOfDataWords,
@@ -25,41 +26,25 @@ static uint16_t DecompressVerseData(
         uint32_t nrOfDecompressedDataBytes
         );
 
+///Decode 
+static int DecompressWord(
+        const struct PDBLayout* pdbLayout,
+        uint16_t wordIndex,
+        FILE* fp,
+        uint8_t* buffer);
+
+#define ENDIAN_BE2LE_U16(u16) \
+    ((((u16) << 8) & 0xFF00u) | (((u16) >> 8) & 0x00FFu))
+
+#define maskTextType 0x3FFF
+#define bookTextType 0xFFFF
+#define chapTextType 0xFFFE
+#define descTextType 0xFFFD
+#define versTextType 0xFFFC
+
 
 ///////////////////////////////////////////////////////////////////////////////
 //Global interface define
-/**
- * ------------------------------------------------------------------
- * verseOffset : 指向下一句距离本章开始的偏移，本章最后一节对应的
- *          verseOffset指向下一章的第一句
- * lastVerseNumber : 记录本章的最后一个verse距离的标号，把所有的verse
- *          序号累加了，所以这个值的意义是本章最后一句是本书的第几句。
- *
- * 以下是Gen的信息
- * ------------------------------------------------------------------
- * chapter  verse   verseOffset lastVerseNumber chapterOffset
- *    1        1       [0]=22                       [0]=0
- *             2       [1]=48                    
- *                     ...         
- *             29      [28]=722
- *             30      [29]=760
- *             31      [30]=784     [0]=31
- *  -----------------
- *    2        1       [31]=17                      [1]=784
- *                     ...
- *                     [54]=597
- *             25      [55]=612     [1]=56
- *  -----------------
- *    3        1       [56]=36                      [2]=1396
- *             2       [57]=53
- *
- * byteOffset(chapter 2, 25) 
- * = chapterOffset[2 - 1] + verseOffset[lastVerseNumber[(2 - 1) - 1] + 25 -2]
- * = 784 + verseOffset[31 + 25 -2]
- * = 784 + verseOffset[54]
- * = 784 + 597
- * = 1381
- */
 uint16_t GetNumberOfChapters(
         const struct PDBLayout* pdbLayout,
         uint8_t  bookToView)//From 1
@@ -118,9 +103,9 @@ uint16_t GetNumberOfVerses(
 
 struct VerseOffset GetVerseOffsetFromPDB(
         const struct PDBLayout* pdbLayout,
-        uint8_t  bookToView,//From 1
-        uint8_t  chapterToView,//From 1
-        uint16_t verseToView)//From 1
+        uint8_t  bookToView,
+        uint8_t  chapterToView,
+        uint16_t verseToView)
 {
     const struct RecordBookDetail* bookDetail = NULL;
     const uint16_t* lastVerseNumber = NULL;
@@ -154,26 +139,29 @@ struct VerseOffset GetVerseOffsetFromPDB(
         return ret_value;
     }
 
-    //从章节号得到章节的第一个Verse的偏移
+    //the first Verse of a chapter.
+    //because lastVerseNumber is the number which
+    //start with 1, add up each number verse of chapter before
+    //in same book.
+    //so the number is the fist verse of next chapter.
     nchaptersFirstVerse = 0; 
 
     if (chapterToView > 1)
     {
-        //lastVerseNumber[i] 保存了第(i = chapterToView - 1)章的最后一节
-        //等价于下一章的开始
         nchaptersFirstVerse = lastVerseNumber[chapterToView - 2];
     }
 
     nverseOffset = chapterOffset[chapterToView - 1];
 
-    //获得这节的偏移
+    //Get the offset os a verse.
     if (verseToView > 1)
     {
         nverseOffset += 
             verseOffset[nchaptersFirstVerse + verseToView - 2];
     }
 
-    //计算这节的长度
+    //Caclute the number of words in this verse
+    //Each word use 2 bytes.
     if (verseToView > 1) 
     { 
         nrOfWords = (
@@ -198,29 +186,18 @@ struct VerseOffset GetVerseOffsetFromPDB(
     
     printf("nrOfWords %d\n", nrOfWords);
 #endif
-    /*
-    //加上数据起始地址
-    nverseOffset += 
-        pdbLayout->bookDetail[bookToView - 1].bookDetailData.offset;
-    */
-    nrOfWords &= 0xFFF;
 
-    //保存计算结果
+    //make sure verse is not more than 1024.
+    //if more than 1024, it must be error.
+    nrOfWords &= 0x3FF;
+
+    //Save result
     ret_value.offset = nverseOffset;
     ret_value.nrOfWords = nrOfWords;
 
     return ret_value;
 }
 
-/**
- * 字典的算法
- * 
- * 每个wordBriefData都有一个属性：单词个数
- *
- * 需要先判断 index 属于哪个dict，然后累加之前的数据，得到word offset，
- * 再加上word data的起始offset
- *
- */
 struct WordOffset GetWordOffsetFromPDB(
         const struct PDBLayout* pdbLayout,
         uint16_t wordIndex)
@@ -229,13 +206,13 @@ struct WordOffset GetWordOffsetFromPDB(
     uint32_t wordDictOffset = 0u;
     const struct WordBriefData* wordBriefData = NULL;
     int i = 0;
-    ///wordIndex属于的字典
+    ///the index of dict which contain wordIndex 
     int indexOfDict = 0;
-    ///之前的word的个数的统计
+    ///the number of word befor of this index.
     uint16_t preIndex = 0u;
-    ///查询的字在本字典里的序号
+    ///index of word in this dict.
     uint16_t currIndex = 0u;
-    ///字的数据在文件中的偏移
+    ///word data offset in file
     uint32_t wordOffset = 0u;
 
     struct WordOffset ret_value;
@@ -244,12 +221,12 @@ struct WordOffset GetWordOffsetFromPDB(
     ret_value.nrOfBytes = 0u;
     ret_value.boolCompressed = 0u;
 
-    //保存一些数据
+    //save some data from local access
     nrOfWordTable = pdbLayout->wordTable.totalIndexes;
     wordBriefData = pdbLayout->wordTable.wordBriefData;
     wordDictOffset = pdbLayout->wordData.offset;
 
-    //判断当前的wordIndex属于哪个字典
+    //decide wordIndex belong to which dict, index of this dict.
     for (i = 0;i < nrOfWordTable;i++)
     {
         if ((wordIndex - 1) < (preIndex + wordBriefData[i].totalWord))
@@ -272,19 +249,19 @@ struct WordOffset GetWordOffsetFromPDB(
         return ret_value;
     }
 
-    //计算本字典之前的字典们占用的总Offset
+    //Cacluate total number of bytes before this dict.
     for (i = 0;i < indexOfDict;i++)
     {
         wordOffset += wordBriefData[i].totalWord * wordBriefData[i].wordLength;
     }
 
-    //计算本字在本字典之前的数据占用的Offset
+    //cacluate number of bytes before current word.
     wordOffset += wordBriefData[indexOfDict].wordLength * currIndex;
 
-    //加上字典数据文件起始偏移
+    //change offset of dict to offset of file.
     wordOffset += pdbLayout->wordData.offset;
 
-    //保存返回值
+    //save data.
     ret_value.offset = wordOffset;
     ret_value.nrOfBytes = wordBriefData[indexOfDict].wordLength;
     ret_value.boolCompressed = wordBriefData[indexOfDict].boolCompressed;
@@ -388,25 +365,26 @@ uint16_t PDBPrintWordDict(
 
 struct VerseData DecompressBookAllVerseData(
         const struct PDBLayout* pdbLayout,
-        uint8_t  bookToView,//From 1
+        uint8_t  bookToView,
         FILE* fp)
 {
-    //数据区起始偏移
+    //Book record text data start offset of file.
     uint32_t dataBaseOffset = 0u;
-    //未解压前数据的长度（字节个数）
+    //number of bytes in file(encoded)
     uint32_t nrOfDataBytes = 0u;
-    //未解压前数据的长度（字个数）
+    //number of words in file(equ to nrOfDataBytes/2)
     uint32_t nrOfDataWords = 0u;
-    //解压后数据的长度（字节个数）
+    //number of bytes have decoded.
     uint32_t nrOfDecompressedDataBytes = 0u;
 
+    //end offset of pdb file.
     uint32_t fileEndOffset = 0u;
-    //本书的第一个数据区的索引号
+    //the first offset of book data index.
     uint16_t  bookDataIndex = 0u;
-    //下一卷书的Details记录的索引号
+    //next book detail struct record index
     uint16_t  bookNextIndex  = 0u;
 
-    //动态解析的数据
+    //dynmaic data.
     uint16_t* compressedVerseData = NULL;
     uint16_t* decompressedVerseData = NULL;
 
@@ -417,20 +395,23 @@ struct VerseData DecompressBookAllVerseData(
     ret_value.verseBuffer = NULL;
     ret_value.nrOfWords   = 0u;
 
-    //记录文件的最大值
+    //Get the max offset fo file.
     fseek(fp,0,SEEK_END);
     fileEndOffset = ftell(fp);
 
-    //puts(__func__);
-
-    //如果这不是最后一卷书，那么用下一卷书的开始可以得到本卷书的数据大小
-    //一般的布局是这样的
-    //Record 书的chapter、verse信息
-    //Record 书的数据
-    //Record 书的数据
+    //If this is no the last book, then use next book details record offset minue
+    //this book first data record offset will get total data length.
     //
-    //Record 书的chapter、verse信息
-    //Record 书的数据
+    //Sample fragment of pdb layout is:
+    //  Record detail(chapter/verse)
+    //  Record text data
+    //  Record text data
+    //  Record text data
+    //  Record text data
+    //
+    //  Record detail(chapter/verse)
+    //  Record text data
+    //  Record text data
     //
     dataBaseOffset = pdbLayout->bookDetail[bookToView - 1].bookDetailData.offset;
 
@@ -452,15 +433,14 @@ struct VerseData DecompressBookAllVerseData(
     }
     else if (bookToView == pdbLayout->version.totalBooks)
     {
-        //如果只有1卷书，那么bookToView 1 == 1，是最后一卷了
-        //如果有66眷属，那么只有66 == 66
+        //if to view last book, use max file offset to get the data length
         bookDataIndex = pdbLayout->version.bookBriefInfo[bookToView - 1].bookIndex + 1;
         nrOfDataBytes = 
             fileEndOffset - 
             pdbLayout->header.jumpTable[bookDataIndex].offset;
     }
 
-    //申请动态数据
+    //Malloc data.
     if (nrOfDataBytes > 0)
     {
         compressedVerseData = 
@@ -472,7 +452,7 @@ struct VerseData DecompressBookAllVerseData(
         }
         else
         {
-            //申请解码后的buffer
+            //Decode buffer.
             nrOfDecompressedDataBytes = (nrOfDataBytes * 8 + 6) / 7;
             decompressedVerseData = 
                 (uint16_t*)malloc(nrOfDecompressedDataBytes * 2);
@@ -488,7 +468,7 @@ struct VerseData DecompressBookAllVerseData(
         }
     }
 
-    //打印调试信息
+    //Some debug information
 #ifdef PDB_DEBUG
     printf("Book[%d].nrOfDataBytes = %ld\n",
             (bookToView - 1), nrOfDataBytes);
@@ -496,13 +476,12 @@ struct VerseData DecompressBookAllVerseData(
             (bookToView - 1), nrOfDecompressedDataBytes);
 #endif
 
-    //如果以上正常，那么读取原始数据（同时进行大小端转换）
-    //然后直接解码
+    //read data, and change endian inside.
     if ((nrOfDataBytes > 0) && 
         (compressedVerseData != NULL) && 
         (decompressedVerseData != NULL))
     {
-        //跳转到数据区，并读取数据
+        //Jump to file and readback real word data.
         fseek(fp, dataBaseOffset, 0);
         nrOfDataWords = nrOfDataBytes / 2;
         for (i = 0;i < nrOfDataWords;i++)
@@ -510,20 +489,48 @@ struct VerseData DecompressBookAllVerseData(
             compressedVerseData[i] = fread_u16(fp);
         }
 
-        //开始解码数据
+        //Decode data.
         DecompressVerseData(compressedVerseData, nrOfDataWords,
                 decompressedVerseData, nrOfDecompressedDataBytes);
 
         free(compressedVerseData);
         compressedVerseData = NULL;
 
-        //保存返回结果
+        //Save data.
         ret_value.verseBuffer = decompressedVerseData;
         ret_value.nrOfWords   = (nrOfDecompressedDataBytes + 1) / 2;
     }
 
     return ret_value;
 }
+
+void DecompressVerse(
+        const struct PDBLayout* pdbLayout,
+        const uint16_t* verseData, 
+        const uint32_t  verseNROfWords,
+        uint32_t verseOffset,
+        uint16_t nrOfWords,
+        FILE* fp,
+        uint8_t* buffer)
+{
+    uint16_t wordIndex = 0u;
+    int i = 0;
+    int tmp = 0;
+
+    for (i = 0;i < nrOfWords;i++)
+    {
+        if (verseOffset + i >= verseNROfWords)
+        {
+            printf("Overflow!!!\n");
+            break;
+        }
+
+        wordIndex = (verseData + verseOffset)[i];
+        tmp = DecompressWord(pdbLayout, wordIndex, fp, buffer);
+        buffer += tmp;
+    }
+}
+
 
 ///////////////////////////////////////////////////////////////////////////////
 //Local interface define
@@ -540,7 +547,7 @@ uint16_t DecompressVerseData(
     struct ByteStreamBit* pByteStream;
     uint16_t wordIndex = 0u;
 
-    //开始解码数据
+    //Initial bytestream.
     pByteStream = ByteStreamBit_Init();
 
 #ifdef PDB_DEBUG
@@ -548,7 +555,7 @@ uint16_t DecompressVerseData(
 #endif
     for (i = 0;i < nrOfDataWords;i++)
     {
-        //放入编码后的数据
+        //save data have been encoded.
 #ifdef PDB_DEBUG
         set_color(C_LIGHT_GREEN);
         printf("%04x ", compressedVerseData[i]);
@@ -560,11 +567,10 @@ uint16_t DecompressVerseData(
         set_color(C_GREY);
 #endif
 
-        //每7个16bit对应8个14bit的数据，
-        //所以放入7个数据之后清空一次
+        //each 8 14bit data decode to 7 16bit data.
         if ((i % 7) == 6)
         {
-            //打印调试信息
+            //some debug information
 #ifdef PDB_DEBUG
             printf("\n");
 
@@ -580,9 +586,7 @@ uint16_t DecompressVerseData(
 
             printf("compressed   : ");
 #endif
-            //printf("endOfDecompressedData1 %d\n", endOfDecompressedData);
-
-            //保存解码后的数据
+            //Map word index to real word.
             for (j = 0;j < 8;j++)
             {
                 wordIndex = ByteStreamBit_GetU14(pByteStream,j);
@@ -590,13 +594,13 @@ uint16_t DecompressVerseData(
                 //printf("%04x ", wordIndex);
             }
 
-            //printf("endOfDecompressedData2 %d\n", endOfDecompressedData);
-
+            //Clean bytestream
             ByteStreamBit_Zero(pByteStream);
         }
     }
 
-    //如果跳出循环之前还未处理最后一次的，那么在这里处理
+    //If data not multi of 8, left data need to decode 
+    //below.
     if ((i % 7) != 0)
     {
 #ifdef PDB_DEBUG
@@ -613,7 +617,7 @@ uint16_t DecompressVerseData(
         set_color(C_GREY);
 #endif
 
-        //保存解码数据
+        //map word index to real word.
         for (j = 0;j < ByteStreamBit_GetNrOfU14Bytes(pByteStream);j++)
         {
             wordIndex = ByteStreamBit_GetU14(pByteStream,j);
@@ -621,10 +625,115 @@ uint16_t DecompressVerseData(
         }
     }
 
-    //释放解码器
+    //Release bytestream.
     ByteStreamBit_Fini(pByteStream);
     pByteStream = NULL;
 
     return endOfDecompressedData;
 }
+
+int DecompressWord(
+        const struct PDBLayout* pdbLayout,
+        uint16_t wordIndex,
+        FILE* fp,
+        uint8_t* buffer)
+{
+    struct WordOffset  wordOffset;
+    uint8_t  wordBuffer[128];
+    uint8_t  bDescriptData = 0u;
+    int i = 0;
+
+    int ret_value = 0;
+    int tmp = 0;
+
+    //Descide if the index is control data.
+    switch(wordIndex & maskTextType)
+    {
+        case 0x0000:
+            bDescriptData = 1u;
+            ret_value     = 0;
+            break;
+        case (bookTextType & maskTextType):
+            memcpy(buffer, "<BOOKTEXT>", 10);
+            ret_value     = 10;
+            bDescriptData = 1u;
+            break;
+        case (chapTextType & maskTextType):
+            memcpy(buffer, "<CHAPTEXT>", 10);
+            ret_value     = 10;
+            bDescriptData = 1u;
+            break;
+        case (descTextType & maskTextType):
+            memcpy(buffer, "<DESCTEXT>", 10);
+            ret_value     = 10;
+            bDescriptData = 1u;
+            break;
+        case (versTextType & maskTextType):
+            memcpy(buffer, "<VERSTEXT>", 10);
+            ret_value     = 10;
+            bDescriptData = 1u;
+            break;
+        default:
+            ret_value     = 0;
+            bDescriptData = 0u;
+            break;
+    }
+
+    if (bDescriptData)
+    {
+        return ret_value;
+    }
+    else
+    {
+    }
+
+
+    //get the word data offset from pdb.
+    wordOffset = GetWordOffsetFromPDB(pdbLayout, wordIndex);
+
+    if (wordOffset.offset > 0)
+    {
+        //read data from pdb file.
+        JumpToOffset(wordOffset.offset, fp);
+        memset(wordBuffer, 0, sizeof(wordBuffer));
+
+        fread(wordBuffer, sizeof(uint8_t), wordOffset.nrOfBytes, fp);
+
+        //decide whether need to decode again.
+        if (!wordOffset.boolCompressed)
+        {
+            //PrintChar(wordBuffer, wordOffset.nrOfBytes);
+            memcpy(buffer, wordBuffer, wordOffset.nrOfBytes);
+            buffer    += wordOffset.nrOfBytes;
+            ret_value += wordOffset.nrOfBytes;
+        }
+        else
+        {
+            //Decode data.
+            for (i = 0;i < (wordOffset.nrOfBytes / 2);i++)
+            {
+                wordIndex  = (wordBuffer[2 * i + 1]) & 0x00FFu;
+                wordIndex |= (wordBuffer[2 * i + 0] << 8) & 0xFF00u;
+
+                tmp = DecompressWord(pdbLayout, wordIndex, fp, buffer);
+                buffer    += tmp;
+                ret_value += tmp;
+            }
+        }
+        if (pdbLayout->version.sepChar > 0)
+        {
+            //printf(" ");
+            memcpy(buffer, " ", 1);
+            buffer += 1;
+            ret_value += 1;
+        }
+    }
+    else
+    {
+        printf("<## 0x%04x Not found##> ", wordIndex);
+    }
+
+    return ret_value;
+}
+
 

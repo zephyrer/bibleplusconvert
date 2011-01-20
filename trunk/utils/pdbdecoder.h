@@ -44,30 +44,36 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 //Global macro define
-//最大的Record个数就是Jump Table的最大个数
-//目前先定为1024，一个Record的最大大小是2Kb
-//所以这个文件的最大大小为2Mb
+//The max number of record is 1024, and this pdb
+//file will be max at 1024 * 4096 == 4Mb.
+//It is enough for bible+ pdb.
 #define JUMPTABLE_MAX   1024
 
-//字典的个数定为64，因为很少有超过64个字母
-//的单词
+//I define this max length because not
+//any word in bible max than 64.
 #define WORDTABLE_MAX   64
 
-//圣经的最大个数只能是66，不用想了
+//Number of Book in bible is 66
+//It is magic digit:)
 #define BOOKNUM_MAX     66
 
 ///////////////////////////////////////////////////////////////////////////////
 //Global PDB struct define
-
-//跳转表，相当于整个文件中各个块的整体索
-//引信息，很重要
+//Jump table, It record the offset of each record!
+//the value from the beginning of file.
+//So it is easy to jump to every record.
 struct JumpTable
 {
     uint32_t    offset;
     uint8_t     reserved[4];
 };
 
-//书卷的摘要信息
+//Brief information of one book
+//record book start index(of jump table.)
+//totalIndexes is total number of data record.
+//each book contain at lease two record.
+//one is book chapter/verse record
+//another is text data record.
 struct BookBriefInfo
 {
     uint16_t    bookNum;
@@ -77,7 +83,11 @@ struct BookBriefInfo
     uint8_t     complexName[32];
 };
 
-//单词本的摘要信息
+//Word dict brief information
+//each word dict hold a set of wordLength's word.
+//if boolCompressed is 1, it means that 
+//the data in this dict is compress, data is
+//index too, you need to find in other dict:)
 struct WordBriefData
 {
     uint16_t    wordLength;
@@ -86,7 +96,8 @@ struct WordBriefData
     uint8_t     boolNothing;
 };
 
-//书卷的详细信息
+//the first struct in all book record.
+//it contain data need for locate the chapter and verse
 struct BookDetailInfo
 {
     uint16_t    numChapters;
@@ -95,7 +106,8 @@ struct BookDetailInfo
     uint16_t*   verseOffset;//Size is lastVerseNumber[numChapters]
 };
 
-//书卷的文字
+//book data begin offset 
+//It does not in pdb, I add this for easy jump:)
 struct BookDetailData
 {
     uint32_t    offset;
@@ -105,8 +117,7 @@ struct BookDetailData
 
 
 ///////////////////////////////////////////////////////////
-//以下为PDB的文件格式定义
-//这是PDB文件头，每个PDB文件都有这个东西
+//This is pdb file header, every pdb file have it.
 struct PDBHeader
 {
     uint8_t     fileName[32];
@@ -128,7 +139,12 @@ struct PDBHeader
     struct JumpTable    jumpTable[JUMPTABLE_MAX];
 };
 
-//这本Bible的简要信息（版本信息）
+//Record of book version
+//record bible version name(kjv,niv,etc...)
+//and other important things.
+//
+//be sure of sepChar, if this is none zero
+//it will be add to separate word.
 struct RecordVersion
 {
     uint8_t     versionName[16];
@@ -141,20 +157,21 @@ struct RecordVersion
     struct BookBriefInfo     bookBriefInfo[BOOKNUM_MAX];
 };
 
-//字典的简要信息
+//Record of dict(word table).
 struct RecordWordTable
 {
     uint16_t    totalIndexes;
     struct WordBriefData     wordBriefData[WORDTABLE_MAX];
 };
 
-//字典的数据开始偏移
+//Record of dict data.
+//It is not in pdb, I add it to easy jump.
 struct RecordWordData
 {
     uint32_t    offset;
 };
 
-//书卷的详细信息
+//Record of book detail info.
 struct RecordBookDetail
 {
     struct BookDetailInfo   bookDetailInfo;
@@ -162,7 +179,7 @@ struct RecordBookDetail
 };
 
 ///////////////////////////////////////////////////////////
-//PDB 文件格式
+//The pdb format layout, easy to read:)
 struct PDBLayout
 {
     //PDB data
@@ -184,8 +201,29 @@ struct PDBLayout
 
 ///////////////////////////////////////////////////////////////////////////////
 //Global PDB interface declare
+/**
+ * @brief set file to offset. such like jump.
+ */
 void JumpToOffset(uint32_t offset, FILE* fp);
+
+/**
+ * @brief Decode pdb file from FILE.
+ *
+ * @return the struct than contain pdb decoded data.
+ * @tips the data of word, data of text not decoded! you need to 
+ *      decode it by your self. So don't close file, if you want
+ *      to decode text.
+ */
 struct PDBLayout* DecodePDBFile(FILE* fp);
+
+/**
+ * @brief free pdb struct
+ * @details
+ *      DecodePDBFile create many malloc data, need this interface
+ *      to free them.
+ *
+ *      Don't forget!!!
+ */
 void FreePDBFile(struct PDBLayout* pdbLayout);
 
 #endif
