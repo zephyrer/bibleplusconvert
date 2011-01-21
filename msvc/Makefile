@@ -2,7 +2,9 @@ CFLAGS = /nologo /I . /I .. /I ../utils
 LFLAGS = /nologo
 
 all:byteTest.exe dictTest.exe \
-	pdbdecoder.exe pdbdictTest.exe pdbinfoTest.exe
+	pdbdecoder.exe pdbdictTest.exe pdbinfoTest.exe \
+	cacheTest.exe \
+	bible.lib
 
 #--executive-----------------------------------------------
 BYTE_SRCS = byteTest.obj byteUtils.obj
@@ -19,7 +21,7 @@ dictTest.exe:$(DICT_SRCS)
 
 PDBDEC_SRCS= decodeTest.obj \
 			 pdbdecoder.obj memcat.obj byteUtils.obj \
-			 pdbhelper.obj pdbcommon.obj
+			 pdbhelper.obj pdbcommon.obj dictUtils.obj
 pdbdecoder.exe:$(PDBDEC_SRCS)
 	link $(PDBDEC_SRCS) \
 		$(LFLAGS) \
@@ -27,7 +29,7 @@ pdbdecoder.exe:$(PDBDEC_SRCS)
 
 PDBDICT_SRCS= pdbdictTest.obj \
 			 pdbdecoder.obj memcat.obj byteUtils.obj \
-			 pdbhelper.obj pdbcommon.obj
+			 pdbhelper.obj pdbcommon.obj dictUtils.obj
 pdbdictTest.exe:$(PDBDICT_SRCS)
 	link $(PDBDICT_SRCS) \
 		$(LFLAGS) \
@@ -35,11 +37,24 @@ pdbdictTest.exe:$(PDBDICT_SRCS)
 
 PDBINFO_SRCS= pdbinfoTest.obj \
 			 pdbdecoder.obj memcat.obj byteUtils.obj \
-			 pdbhelper.obj pdbcommon.obj
+			 pdbhelper.obj pdbcommon.obj dictUtils.obj
 pdbinfoTest.exe:$(PDBINFO_SRCS)
 	link $(PDBINFO_SRCS) \
 		$(LFLAGS) \
 		/OUT:pdbinfoTest.exe
+
+CACHE_SRCS= cacheTest.obj \
+			 memcacher.obj
+cacheTest.exe:$(CACHE_SRCS)
+	link $(CACHE_SRCS) \
+		$(LFLAGS) \
+		/OUT:cacheTest.exe
+
+bible.lib:pdbcommon.obj pdbdecoder.obj pdbhelper.obj \
+	dictUtils.obj byteUtils.obj memcacher.obj
+	lib /nologo pdbcommon.obj pdbdecoder.obj pdbhelper.obj \
+		dictUtils.obj byteUtils.obj memcacher.obj \
+		/OUT:bible.lib
 
 #--object--------------------------------------------------
 byteTest.obj:../unitTest/byteTest.c
@@ -60,6 +75,10 @@ pdbdictTest.obj:../unitTest/pdbdictTest.c
 
 pdbinfoTest.obj:../unitTest/pdbinfoTest.c
 	cl ../unitTest/pdbinfoTest.c \
+		$(CFLAGS) /c
+
+cacheTest.obj:../unitTest/cacheTest.c
+	cl ../unitTest/cacheTest.c \
 		$(CFLAGS) /c
 
 memcat.obj:../utils/memcat.c
@@ -84,6 +103,10 @@ pdbhelper.obj:../utils/pdbhelper.c
 
 pdbcommon.obj:../utils/pdbcommon.c
 	cl ../utils/pdbcommon.c \
+		$(CFLAGS) /c
+
+memcacher.obj:../utils/memcacher.c
+	cl ../utils/memcacher.c \
 		$(CFLAGS) /c
 
 #-/clean---------------------------------------------------

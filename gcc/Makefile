@@ -1,7 +1,8 @@
 CFLAGS = -I .. -I ../utils -Wall
 
 all:byteTest.exe dictTest.exe \
-	pdbdecoder.exe pdbdictTest.exe pdbinfoTest.exe
+	pdbdecoder.exe pdbdictTest.exe pdbinfoTest.exe \
+	cacheTest.exe
 
 #--executive-----------------------------------------------
 BYTE_SRCS = ../unitTest/byteTest.c byteUtils.o
@@ -18,7 +19,7 @@ dictTest.exe:$(DICT_SRCS)
 
 PDBDEC_SRCS= ../unitTest/decodeTest.c \
 			 pdbdecoder.o memcat.o byteUtils.o \
-			 pdbhelper.o pdbcommon.o
+			 pdbhelper.o pdbcommon.o dictUtils.o
 pdbdecoder.exe:$(PDBDEC_SRCS)
 	gcc $(PDBDEC_SRCS) \
 		$(CFLAGS) \
@@ -26,7 +27,7 @@ pdbdecoder.exe:$(PDBDEC_SRCS)
 
 PDBDICT_SRCS= ../unitTest/pdbdictTest.c \
 			 pdbdecoder.o memcat.o byteUtils.o \
-			 pdbhelper.o pdbcommon.o
+			 pdbhelper.o pdbcommon.o dictUtils.o
 pdbdictTest.exe:$(PDBDICT_SRCS)
 	gcc $(PDBDICT_SRCS) \
 		$(CFLAGS) \
@@ -34,11 +35,18 @@ pdbdictTest.exe:$(PDBDICT_SRCS)
 
 PDBINFO_SRCS= ../unitTest/pdbinfoTest.c \
 			 pdbdecoder.o memcat.o byteUtils.o \
-			 pdbhelper.o pdbcommon.o
+			 pdbhelper.o pdbcommon.o dictUtils.o
 pdbinfoTest.exe:$(PDBINFO_SRCS)
 	gcc $(PDBINFO_SRCS) \
 		$(CFLAGS) \
 		-o pdbinfoTest.exe
+
+CACHE_SRC = ../unitTest/cacheTest.c \
+			memcacher.o
+cacheTest.exe:$(CACHE_SRC)
+	gcc $(CACHE_SRC) \
+		$(CFLAGS) \
+		-o cacheTest.exe
 
 #--object--------------------------------------------------
 memcat.o:../utils/memcat.c
@@ -63,6 +71,10 @@ pdbhelper.o:../utils/pdbhelper.c
 
 pdbcommon.o:../utils/pdbcommon.c
 	gcc ../utils/pdbcommon.c \
+		$(CFLAGS) -c
+
+memcacher.o:../utils/memcacher.c
+	gcc ../utils/memcacher.c \
 		$(CFLAGS) -c
 
 #--clean---------------------------------------------------

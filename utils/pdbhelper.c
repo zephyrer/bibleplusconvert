@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "byteUtils.h"
+#include "dictUtils.h"
 #include "pdbhelper.h"
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -30,6 +31,7 @@ static uint16_t DecompressVerseData(
 static int DecompressWord(
         const struct PDBLayout* pdbLayout,
         uint16_t wordIndex,
+        const struct WordBook* pWordBook,
         FILE* fp,
         uint8_t* buffer);
 
@@ -510,6 +512,7 @@ void DecompressVerse(
         const uint32_t  verseNROfWords,
         uint32_t verseOffset,
         uint16_t nrOfWords,
+        const struct WordBook* pWordBook,
         FILE* fp,
         uint8_t* buffer)
 {
@@ -526,11 +529,69 @@ void DecompressVerse(
         }
 
         wordIndex = (verseData + verseOffset)[i];
-        tmp = DecompressWord(pdbLayout, wordIndex, fp, buffer);
+        tmp = DecompressWord(pdbLayout, wordIndex, pWordBook, fp, buffer);
         buffer += tmp;
     }
 }
 
+struct WordBook* BuildWordDictInRam(
+        const struct PDBLayout* pdbLayout,
+        FILE* fp)
+{
+    char buffer[MAX_WORD_LENGTH];
+    struct WordBook* wordBook = NULL;
+    uint32_t nrOfTotalWords = 0;
+    uint32_t nrOfWords = 0;
+    uint16_t lengthOfWord = 0;
+    uint16_t totalIndexes = 0;
+    int i = 0;
+    int j = 0;
+
+    totalIndexes = pdbLayout->wordTable.totalIndexes;
+
+    for (i = 0;i < totalIndexes;i++)
+    {
+        nrOfWords += pdbLayout->wordTable.wordBriefData[i].totalWord;
+    }
+
+    nrOfTotalWords = nrOfWords;
+
+    wordBook = WordBook_init(nrOfTotalWords);
+
+    if (wordBook == NULL)
+    {
+        printf("Error create word book!\n");
+        return NULL;
+    }
+    
+    JumpToOffset(pdbLayout->wordData.offset, fp);
+
+    for (i = 0;i < totalIndexes;i++)
+    {
+        nrOfWords = pdbLayout->wordTable.wordBriefData[i].totalWord;
+        lengthOfWord = pdbLayout->wordTable.wordBriefData[i].wordLength;
+        if (pdbLayout->wordTable.wordBriefData[i].boolCompressed)
+        {
+            for (j = 0;j < nrOfWords;j++)
+            {
+                memset(buffer, 0, MAX_WORD_LENGTH);
+                fread(buffer, sizeof(uint8_t), lengthOfWord, fp);
+                WordBook_AppendBLOB(wordBook, buffer, lengthOfWord);
+            }
+        }
+        else
+        {
+            for (j = 0;j < nrOfWords;j++)
+            {
+                memset(buffer, 0, MAX_WORD_LENGTH);
+                fread(buffer, sizeof(uint8_t), lengthOfWord, fp);
+                WordBook_AppendWord(wordBook, buffer);
+            }
+        }   
+    }
+
+    return wordBook;
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 //Local interface define
@@ -635,6 +696,7 @@ uint16_t DecompressVerseData(
 int DecompressWord(
         const struct PDBLayout* pdbLayout,
         uint16_t wordIndex,
+        const struct WordBook* pWordBook,
         FILE* fp,
         uint8_t* buffer)
 {
@@ -642,6 +704,8 @@ int DecompressWord(
     uint8_t  wordBuffer[128];
     uint8_t  bDescriptData = 0u;
     int i = 0;
+
+    const char* pResult = NULL;
 
     int ret_value = 0;
     int tmp = 0;
@@ -694,10 +758,17 @@ int DecompressWord(
     if (wordOffset.offset > 0)
     {
         //read data from pdb file.
-        JumpToOffset(wordOffset.offset, fp);
+        //JumpToOffset(wordOffset.offset, fp);
         memset(wordBuffer, 0, sizeof(wordBuffer));
 
-        fread(wordBuffer, sizeof(uint8_t), wordOffset.nrOfBytes, fp);
+        //fread(wordBuffer, sizeof(uint8_t), wordOffset.nrOfBytes, fp);
+        if (WordBook_GetWord(
+            pWordBook,
+            wordIndex - 1,
+            &pResult) == WBK_OK)
+        {
+            memcpy(wordBuffer, pResult, wordOffset.nrOfBytes);
+        }
 
         //decide whether need to decode again.
         if (!wordOffset.boolCompressed)
@@ -715,7 +786,12 @@ int DecompressWord(
                 wordIndex  = (wordBuffer[2 * i + 1]) & 0x00FFu;
                 wordIndex |= (wordBuffer[2 * i + 0] << 8) & 0xFF00u;
 
-                tmp = DecompressWord(pdbLayout, wordIndex, fp, buffer);
+                tmp = DecompressWord(
+                        pdbLayout,
+                        wordIndex,
+                        pWordBook,
+                        fp,
+                        buffer);
                 buffer    += tmp;
                 ret_value += tmp;
             }

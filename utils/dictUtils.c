@@ -116,6 +116,41 @@ WBK_RESULT WordBook_AppendWord(struct WordBook* pWordBook, const char* pWord)
     }
 }
 
+WBK_RESULT WordBook_AppendBLOB(struct WordBook* pWordBook, const char* pWord, int nrOfBytes)
+{
+    WordItem wordItem = NULL;
+
+    CHECK_RETURN_IF_ARGUMENT_IS_NULL(pWordBook);
+    CHECK_RETURN_IF_ARGUMENT_IS_NULL(pWord);
+
+    wordItem = (WordItem)malloc(nrOfBytes);
+    memcpy(wordItem, pWord, nrOfBytes);
+
+    if (wordItem != NULL)
+    {
+        if (pWordBook->nrOfUseWords < pWordBook->nrOfMaxWords)
+        {
+            pWordBook->wordList[pWordBook->nrOfUseWords] = wordItem;
+            pWordBook->nrOfUseWords++;
+
+            return WBK_OK;
+        }
+        else
+        {
+            OPERATION_FAIL_MSG("Book Full!");
+            free(wordItem);
+            wordItem = NULL;
+
+            return WBK_FAIL;
+        }
+    }
+    else
+    {
+        MALLOC_FAIL_MSG("strdup");
+        return WBK_FAIL;
+    }
+}
+
 WBK_RESULT WordBook_GetWord(
         const struct WordBook* pWordBook, 
         int index,
