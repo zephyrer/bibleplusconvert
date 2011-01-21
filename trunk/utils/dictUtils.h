@@ -43,6 +43,13 @@ WordBook_AppendWord(
 );
 
 WBK_RESULT 
+WordBook_AppendBLOB(
+        struct WordBook* pWordBook, 
+        const char* pWord,
+        int nrOfBytes
+);
+
+WBK_RESULT 
 WordBook_GetWord(
         const struct WordBook* pWordBook, 
         int index,

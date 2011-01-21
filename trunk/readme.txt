@@ -1,3 +1,7 @@
+bzr -r:tag pdbconvert-0.0.2.2
+    @brief
+        Add memory cache, word cache for speed up.
+
 bzr -r:tag pdbconvert-0.0.2
     @brief 
         Support msvc.

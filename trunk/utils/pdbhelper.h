@@ -3,9 +3,12 @@
 
 #include "pdbcommon.h"
 #include "pdbdecoder.h"
+#include "dictUtils.h"
 
 ///////////////////////////////////////////////////////////////////////////////
 //Global Vserse return value
+#define MAX_WORD_LENGTH 128
+
 #define VERSEOFFSET_INVAILD 0xFFFFFFFF
 struct VerseOffset
 {
@@ -106,8 +109,16 @@ void DecompressVerse(
         const uint32_t  verseNROfWords,
         uint32_t verseOffset,
         uint16_t nrOfWords,
+        const struct WordBook* pWordBook,
         FILE* fp,
         uint8_t* buffer);
+
+/**
+ * @brief build word dict to ram, for speed up random access.
+ */
+struct WordBook* BuildWordDictInRam(
+        const struct PDBLayout* pdbLayout,
+        FILE* fp);
 
 #endif
 

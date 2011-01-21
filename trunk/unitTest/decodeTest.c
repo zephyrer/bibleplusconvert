@@ -16,6 +16,7 @@
 #include "pdbdecoder.h"
 #include "pdbhelper.h"
 #include "byteUtils.h"
+#include "dictUtils.h"
 #include "memcat.h"
 
 //#define TEST_DEBUG
@@ -48,6 +49,7 @@ int main(int argc, const char* argv[])
     struct PDBLayout* pdbLayout = NULL;
     struct VerseOffset verseOffset;
     struct VerseData verseData;
+    struct WordBook*  pWordBook = NULL;
 
     uint16_t bookToView   = 0u;
     uint16_t chapterToView= 0u;
@@ -74,6 +76,18 @@ int main(int argc, const char* argv[])
     }
 
     pdbLayout = DecodePDBFile(fp);
+
+    if (pdbLayout != NULL)
+    {
+        //Optimize word.
+        pWordBook = BuildWordDictInRam(pdbLayout, fp);
+        if (pWordBook == NULL)
+        {
+            printf("Error build word dict!\n");
+            FreePDBFile(pdbLayout);
+            pdbLayout = NULL;
+        }
+    }
 
     if (pdbLayout != NULL)
     {
@@ -127,6 +141,7 @@ int main(int argc, const char* argv[])
                             verseData.nrOfWords,
                             verseOffset.offset,
                             verseOffset.nrOfWords,
+                            pWordBook,
                             fp,
                             buffer);
                     printf("%s",buffer);
@@ -140,6 +155,10 @@ int main(int argc, const char* argv[])
             free(verseData.verseBuffer);
             verseData.verseBuffer = NULL;
         }
+
+        //Release word book
+        WordBook_fini(pWordBook);
+        pWordBook = NULL;
 
         //release pdb struct.
         FreePDBFile(pdbLayout);
